@@ -95,7 +95,6 @@ form textarea{resize:vertical;min-height:70px}
 .task.late .pos{color:var(--red)}
 .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--muted);margin:-4px 0 10px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
-.due-in{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
 .staff{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px}
 .person{border:2px solid transparent;background:var(--bg);border-radius:10px;padding:6px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px;line-height:1.2;text-align:center}
 .person[aria-pressed="true"]{border-color:var(--fjord);background:var(--fjord-soft);font-weight:600}
@@ -124,6 +123,10 @@ body[data-view="trainee"] .trainee-bar{display:flex}
 .login-box label{display:block;font-weight:600;font-size:14px;margin:10px 0 4px}
 .login-box input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg)}
 .login-box .btn{margin-top:16px}
+.edit-dlg{border:1px solid var(--line);border-radius:14px;padding:22px;width:min(460px,calc(100% - 32px));background:var(--surface);color:var(--ink)}
+.edit-dlg::backdrop{background:rgba(15,30,29,.55)}
+.edit-dlg h2{font-size:22px;margin-bottom:14px}
+.dlg-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
 .stats{margin-top:22px}
 .stats-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
 .month-nav{display:flex;align-items:center;gap:8px;font-weight:600}
@@ -156,6 +159,40 @@ body[data-view="trainee"] .trainee-bar{display:flex}
     <div class="msg" id="loginMsg" role="status"></div>
   </div>
 </section>
+
+<dialog class="edit-dlg" id="editDlg">
+  <form id="editForm" novalidate>
+    <h2>Rediger oppgave</h2>
+    <div class="row">
+      <label for="e-type">Hva skal gjøres?</label>
+      <select id="e-type"></select>
+    </div>
+    <div class="row">
+      <label for="e-addr">Oppdrag / adresse</label>
+      <input id="e-addr" maxlength="120">
+    </div>
+    <div class="row">
+      <label for="e-desc">Beskrivelse</label>
+      <textarea id="e-desc" maxlength="2000"></textarea>
+    </div>
+    <div class="row">
+      <label for="e-due">Frist</label>
+      <div class="two">
+        <input id="e-due" type="date" required>
+        <input id="e-time" type="time" required aria-label="Klokkeslett">
+      </div>
+    </div>
+    <div class="row">
+      <label for="e-extra">Tilleggsinfo</label>
+      <textarea id="e-extra" maxlength="2000"></textarea>
+    </div>
+    <div class="msg" id="editMsg" role="status"></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="editCancel">Avbryt</button>
+      <button type="submit" class="btn">Lagre endringer</button>
+    </div>
+  </form>
+</dialog>
 
 <div class="wrap" id="app" hidden>
   <header class="top">
@@ -255,7 +292,7 @@ const TYPES = ["Salgsoppgave", "Kontrakt", "Bildetekster", "Visning", "Annet"];
 const DAY = 86400000;
 const $ = s => document.querySelector(s);
 let sb = null, isTrainee = false, view = "megler";
-let tasks = [], staff = [], pickedStaff = "", selectedType = TYPES[0];
+let tasks = [], staff = [], pickedStaff = "", selectedType = TYPES[0], editing = null;
 
 function store(k, v){ try{ if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); }catch(e){ return null; } }
 
@@ -389,7 +426,7 @@ function renderStaff(){
   if (!staff.length) box.append(h("div", {class:"empty"}, "Ingen ansatte lagt inn ennå."));
   for (const p of staff){
     box.append(h("button", {type:"button", class:"person", "aria-pressed": p.id === pickedStaff ? "true" : "false",
-      onclick:() => { pickedStaff = p.id; store("tk-staff", p.id); renderStaff(); }}, avatar(p), p.name));
+      onclick:() => { pickedStaff = p.id; store("tk-staff", p.id); renderStaff(); render(); }}, avatar(p), p.name));
   }
 }
 
@@ -397,7 +434,6 @@ function renderStaff(){
 function title(t){ return t.type + (t.address ? " – " + t.address : ""); }
 function render(){
   const q = tasks.filter(t => t.status === "queue").sort(byCreated);
-  const over = q.filter(isOverdue);
   const w = tasks.filter(t => t.status === "working").sort((a,b) => ms(a.started_at) - ms(b.started_at));
   const cutoff = Date.now() - DAY;
   const d = tasks.filter(t => t.status === "done" && ms(t.done_at) > cutoff).sort((a,b) => ms(b.done_at) - ms(a.done_at));
@@ -413,9 +449,7 @@ function render(){
     } else {
       now.append(h("div", {class:"slot free"},
         h("div", {class:"who-name"}, `${name} er ledig`),
-        over.length
-          ? h("div", {class:"doing", style:"color:var(--red);font-weight:600"}, `${over.length} ${over.length===1?"oppgave":"oppgaver"} over frist`)
-          : h("div", {class:"doing"}, q.length ? `${q.length} ${q.length===1?"oppgave venter":"oppgaver venter"} i køen` : "Ingenting i køen")));
+        h("div", {class:"doing"}, "Klar for ny oppgave")));
     }
   }
   fill("#queue", q, "Køen er tom.", true);
@@ -439,15 +473,18 @@ function card(t, pos){
     if (t.status === "queue"){
       actions.append(h("button", {class:"btn small", onclick:() => claim(t, "Victor")}, "Victor tar den"));
       actions.append(h("button", {class:"btn small", onclick:() => claim(t, "Siw")}, "Siw tar den"));
-      actions.append(newDueBtn(t));
+      actions.append(h("button", {class:"btn small ghost", onclick:() => openEdit(t)}, "Rediger"));
       actions.append(h("button", {class:"btn small ghost", onclick:() => remove(t)}, "Slett"));
     } else if (t.status === "working"){
-      actions.append(newDueBtn(t));
       actions.append(h("button", {class:"btn small ok", onclick:() => update(t, {status:"done", done_at:new Date().toISOString()})}, "Marker som ferdig"));
+      actions.append(h("button", {class:"btn small ghost", onclick:() => openEdit(t)}, "Rediger"));
       actions.append(h("button", {class:"btn small ghost", onclick:() => update(t, {status:"queue", assignee:null, started_at:null})}, "Legg tilbake i køen"));
     } else {
       actions.append(h("button", {class:"btn small ghost", onclick:() => update(t, {status:"working", done_at:null})}, "Åpne igjen"));
     }
+  } else if (view === "megler" && t.status === "queue" && pickedStaff && t.requested_by_id === pickedStaff){
+    actions.append(h("button", {class:"btn small ghost", onclick:() => openEdit(t)}, "Rediger"));
+    actions.append(h("button", {class:"btn small ghost", onclick:() => remove(t)}, "Slett"));
   }
   const body = [
     h("div", {class:"head"},
@@ -463,6 +500,37 @@ function card(t, pos){
     h("div", {class:"pos", "aria-label":`Nummer ${pos} i køen`}, pos), h("div", {}, ...body));
   return h("article", {class:`task ${statusCls}`}, ...body);
 }
+
+/* ---------- redigering ---------- */
+TYPES.forEach(tp => $("#e-type").append(h("option", {value:tp}, tp)));
+function openEdit(t){
+  editing = t;
+  if (!TYPES.includes(t.type)) $("#e-type").append(h("option", {value:t.type}, t.type));
+  $("#e-type").value = t.type;
+  $("#e-addr").value = t.address || "";
+  $("#e-desc").value = t.description || "";
+  $("#e-due").value = t.due || "";
+  $("#e-time").value = t.due_time || "16:00";
+  $("#e-extra").value = t.extra || "";
+  $("#editMsg").textContent = "";
+  $("#editDlg").showModal();
+}
+$("#editCancel").addEventListener("click", () => $("#editDlg").close());
+$("#editForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  if (!editing) return;
+  if (!$("#e-due").value){ $("#editMsg").textContent = "Velg en frist."; return; }
+  const patch = {
+    type:$("#e-type").value, address:$("#e-addr").value.trim(), description:$("#e-desc").value.trim(),
+    due:$("#e-due").value, due_time:$("#e-time").value || "16:00", extra:$("#e-extra").value.trim()
+  };
+  let query = sb.from("tasks").update(patch).eq("id", editing.id);
+  if (!isTrainee) query = query.eq("status", "queue");
+  const { data, error } = await query.select();
+  if (error){ $("#editMsg").textContent = "Fikk ikke lagret. Prøv igjen."; return; }
+  if (!data.length){ $("#editMsg").textContent = "En trainee har allerede tatt denne oppgaven. Si fra til dem direkte."; return; }
+  $("#editDlg").close(); editing = null; loadTasks();
+});
 
 /* ---------- statistikk ---------- */
 let statMonth = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
@@ -480,94 +548,4 @@ function renderStats(){
   if (!isTrainee) return;
   const start = statMonth, end = new Date(start.getFullYear(), start.getMonth()+1, 1);
   const label = start.toLocaleDateString("nb-NO", {month:"long", year:"numeric"});
-  $("#statMonth").textContent = label.charAt(0).toUpperCase() + label.slice(1);
-  const cur = new Date();
-  $("#nextMonth").disabled = start.getFullYear() === cur.getFullYear() && start.getMonth() === cur.getMonth();
-  const done = tasks.filter(t => t.status === "done" && t.assignee && ms(t.done_at) >= start.getTime() && ms(t.done_at) < end.getTime());
-  $("#statTotal").textContent = done.length ? `${done.length} ${done.length===1?"oppgave":"oppgaver"} ferdig denne måneden.` : "Ingen ferdige oppgaver denne måneden.";
-  const avg = a => a.length ? a.reduce((x,y) => x+y, 0)/a.length : 0;
-  const people = [...new Set(["Victor", "Siw", ...done.map(t => t.assignee)])];
-  $("#stats").replaceChildren(...people.map(name => {
-    const mine = done.filter(t => t.assignee === name);
-    const onTime = mine.filter(t => { const dl = deadlineMs(t); return dl == null || ms(t.done_at) <= dl; }).length;
-    const leads = mine.map(t => ms(t.done_at) - ms(t.created_at)).filter(x => x > 0);
-    const work = mine.map(t => ms(t.done_at) - ms(t.started_at)).filter(x => x > 0);
-    const byType = [...new Set(mine.map(t => t.type))].map(tp => [tp, mine.filter(t => t.type === tp).length]).sort((a,b) => b[1]-a[1]);
-    const max = Math.max(1, ...byType.map(x => x[1]));
-    return h("div", {class:"stat-card"},
-      h("h3", {}, name),
-      h("div", {class:"stat-big"}, mine.length),
-      h("div", {class:"stat-sub"}, mine.length === 1 ? "oppgave ferdig" : "oppgaver ferdig"),
-      mine.length ? [
-        h("div", {class:"stat-line"}, h("span", {}, "Innen fristen"), h("strong", {}, `${onTime} av ${mine.length} (${Math.round(onTime/mine.length*100)} %)`)),
-        h("div", {class:"stat-line"}, h("span", {}, "Snitt fra lagt inn til ferdig"), h("strong", {}, dur(avg(leads)))),
-        h("div", {class:"stat-line"}, h("span", {}, "Snitt arbeidstid"), h("strong", {}, dur(avg(work)))),
-        h("div", {class:"bars"}, ...byType.map(([tp, n]) => h("div", {class:"bar"},
-          h("span", {}, tp), h("span", {class:"track"}, h("span", {class:"fill", style:`width:${n/max*100}%`})), h("span", {class:"v"}, n))))
-      ] : null);
-  }));
-}
-$("#prevMonth").addEventListener("click", () => { statMonth = new Date(statMonth.getFullYear(), statMonth.getMonth()-1, 1); renderStats(); });
-$("#nextMonth").addEventListener("click", () => { statMonth = new Date(statMonth.getFullYear(), statMonth.getMonth()+1, 1); renderStats(); });
-
-/* ---------- trainee-handlinger ---------- */
-function newDueBtn(t){
-  const inp = h("input", {type:"date", class:"due-in", "aria-label":"Ny frist", value:t.due || "",
-    onchange:ev => { if (ev.target.value) update(t, {due:ev.target.value, due_time:t.due_time || "16:00"}); }});
-  const btn = h("button", {class:"btn small ghost", type:"button", onclick:() => {
-    try{ inp.showPicker(); }catch(e){ inp.style.cssText = "position:static;opacity:1;width:auto;height:auto;pointer-events:auto"; inp.focus(); }
-  }}, "Ny frist");
-  return h("span", {style:"position:relative;display:inline-flex"}, btn, inp);
-}
-async function claim(t, name){
-  const { data, error } = await sb.from("tasks")
-    .update({ status:"working", assignee:name, started_at:new Date().toISOString() })
-    .eq("id", t.id).eq("status", "queue").select();
-  if (error){ showBanner("Fikk ikke tatt oppgaven. Prøv igjen."); return; }
-  if (!data.length){ showBanner("Oppgaven er allerede tatt."); loadTasks(); return; }
-  showBanner(""); loadTasks();
-}
-async function update(t, patch){
-  const { error } = await sb.from("tasks").update(patch).eq("id", t.id);
-  if (error) showBanner("Fikk ikke lagret endringen. Prøv igjen."); else { showBanner(""); loadTasks(); }
-}
-async function remove(t){
-  if (!confirm(`Slette «${title(t)}»?`)) return;
-  const { error } = await sb.from("tasks").delete().eq("id", t.id);
-  if (error) showBanner("Fikk ikke slettet oppgaven."); else loadTasks();
-}
-
-/* ---------- skjema ---------- */
-let formReady = false;
-function initForm(){
-  if (formReady) return; formReady = true;
-  const box = $("#types");
-  TYPES.forEach(tp => box.append(h("button", {type:"button", "aria-pressed": tp === selectedType ? "true" : "false", onclick:ev => {
-    selectedType = tp;
-    box.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b === ev.currentTarget ? "true" : "false"));
-  }}, tp)));
-  $("#f-due").value = new Date(Date.now() + DAY).toISOString().slice(0,10);
-  $("#form").addEventListener("submit", async ev => {
-    ev.preventDefault();
-    const person = staffById(pickedStaff), due = $("#f-due").value, desc = $("#f-desc").value.trim();
-    if (!due){ setMsg("Velg en frist.", true); return; }
-    if (!person){ setMsg("Trykk på bildet ditt så vi vet hvem som legger inn.", true); return; }
-    if (!desc && !$("#f-addr").value.trim()){ setMsg("Skriv en adresse eller en beskrivelse.", true); return; }
-    $("#submit").disabled = true;
-    const { error } = await sb.from("tasks").insert({
-      type:selectedType, address:$("#f-addr").value.trim(), description:desc,
-      extra:$("#f-extra").value.trim(), due, due_time:$("#f-time").value || "16:00",
-      requested_by:person.name, requested_by_id:person.id
-    });
-    $("#submit").disabled = false;
-    if (error){ setMsg("Fikk ikke lagt inn oppgaven. Prøv igjen.", true); return; }
-    ["#f-addr", "#f-desc", "#f-extra"].forEach(s => $(s).value = "");
-    $("#f-time").value = "16:00";
-    setMsg("Lagt i køen."); loadTasks();
-  });
-}
-
-boot();
-</script>
-</body>
-</html>
+  $("#statMonth").textContent =
