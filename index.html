@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trainee-køen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F6F5F1; --surface:#FFFFFF; --ink:#18302F; --muted:#5E6B69; --line:#DAD8D0;
+  --fjord:#1F4A47; --fjord-soft:#E2ECEA; --amber:#B97800; --amber-soft:#FBF0D6;
+  --red:#B5361F; --red-soft:#F8E1DB; --green:#2C7352; --green-soft:#DFF0E6;
+  --focus:#2B6CB0;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#121A19; --surface:#1A2423; --ink:#E7EEEC; --muted:#9AAAA7; --line:#2E3B39;
+  --fjord:#7FC3BB; --fjord-soft:#1E3533; --amber:#E8B44A; --amber-soft:#3A2E14;
+  --red:#F08A73; --red-soft:#3D211B; --green:#6FCB9C; --green-soft:#17321F; --focus:#8DB8F0;
+}}
+:root[data-theme="dark"]{
+  --bg:#121A19; --surface:#1A2423; --ink:#E7EEEC; --muted:#9AAAA7; --line:#2E3B39;
+  --fjord:#7FC3BB; --fjord-soft:#1E3533; --amber:#E8B44A; --amber-soft:#3A2E14;
+  --red:#F08A73; --red-soft:#3D211B; --green:#6FCB9C; --green-soft:#17321F; --focus:#8DB8F0;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 "Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2,h3{font-family:"Bricolage Grotesque","Public Sans",system-ui,sans-serif;margin:0;line-height:1.15}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px}
+
+header.top{display:flex;flex-wrap:wrap;align-items:start;justify-content:space-between;gap:12px;margin-bottom:18px}
+header.top h1{font-size:clamp(28px,5vw,40px);font-weight:700;letter-spacing:-.01em}
+header.top p{margin:4px 0 0;color:var(--muted)}
+.who{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.who label{color:var(--muted);font-size:14px}
+.who select,.who input{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 10px}
+.who input{width:150px}
+
+/* Status board: the one bold element */
+.now{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:22px}
+.slot{background:var(--fjord);color:#fff;border-radius:14px;padding:16px 18px;min-height:96px;display:flex;flex-direction:column;justify-content:center}
+:root[data-theme="dark"] .slot{color:#0F1E1D}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .slot{color:#0F1E1D}}
+.slot.free{background:var(--surface);color:var(--ink);border:1.5px dashed var(--line)}
+.slot .who-name{font-family:"Bricolage Grotesque",sans-serif;font-size:22px;font-weight:700}
+.slot .doing{font-size:16px;margin-top:2px;opacity:.95}
+.slot.free .doing{color:var(--muted)}
+
+.layout{display:grid;grid-template-columns:340px 1fr;gap:22px;align-items:start}
+@media (max-width:860px){.layout{grid-template-columns:1fr}}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.panel h2{font-size:20px;margin-bottom:12px}
+form .row{margin-bottom:12px}
+form label{display:block;font-weight:600;font-size:14px;margin-bottom:4px}
+form .hint{font-weight:400;color:var(--muted)}
+form input,form select,form textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:var(--bg)}
+form textarea{resize:vertical;min-height:70px}
+.two{display:grid;grid-template-columns:1fr 110px;gap:8px}
+.types{display:flex;flex-wrap:wrap;gap:6px}
+.types button{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:5px 11px;cursor:pointer;font-size:14px}
+.types button[aria-pressed="true"]{background:var(--fjord);border-color:var(--fjord);color:var(--surface)}
+.btn{border:0;border-radius:8px;padding:10px 14px;font-weight:600;cursor:pointer;background:var(--fjord);color:var(--surface)}
+.btn.wide{width:100%}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.ok{background:var(--green);color:var(--surface)}
+.btn.small{padding:6px 10px;font-size:14px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.msg{font-size:14px;margin-top:8px;min-height:20px;color:var(--muted)}
+.msg.err{color:var(--red)}
+
+.cols{display:grid;gap:22px}
+.col h2{font-size:20px;display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+.col h2 .n{font-family:"Public Sans",sans-serif;font-size:14px;font-weight:500;color:var(--muted)}
+.list{display:grid;gap:10px}
+.empty{color:var(--muted);padding:14px;border:1px dashed var(--line);border-radius:10px;font-size:14px}
+
+.task{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;border-left:5px solid var(--line)}
+.task.soon{border-left-color:var(--amber)}
+.task.ok{border-left-color:var(--green)}
+.due.ok{background:var(--green-soft);color:var(--green)}
+.task.late{border-left-color:var(--red)}
+.task.working{border-left-color:var(--fjord)}
+.task.done{border-left-color:var(--green);opacity:.85}
+.task .head{display:flex;justify-content:space-between;gap:10px;align-items:start}
+.task h3{font-size:17px;font-weight:700}
+.task .addr{color:var(--muted);font-size:14px}
+.due{white-space:nowrap;font-size:13px;font-weight:600;padding:3px 8px;border-radius:6px;background:var(--fjord-soft);color:var(--fjord)}
+.due.soon{background:var(--amber-soft);color:var(--amber)}
+.due.late{background:var(--red-soft);color:var(--red)}
+.due.done{background:var(--green-soft);color:var(--green)}
+.task .desc{margin:8px 0 0;white-space:pre-wrap}
+.task .extra{margin:6px 0 0;font-size:14px;color:var(--muted);white-space:pre-wrap}
+.task .meta{margin-top:10px;font-size:13px;color:var(--muted)}
+.task .worker{margin-top:8px;font-weight:600;color:var(--fjord)}
+.task .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+details.done-wrap summary{cursor:pointer;font-family:"Bricolage Grotesque",sans-serif;font-size:20px;font-weight:700;margin-bottom:10px}
+.staff{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px}
+.person{border:2px solid transparent;background:var(--bg);border-radius:10px;padding:6px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px;line-height:1.2;text-align:center}
+.person[aria-pressed="true"]{border-color:var(--fjord);background:var(--fjord-soft);font-weight:600}
+.avatar{width:52px;height:52px;border-radius:50%;object-fit:cover;background:var(--fjord-soft);color:var(--fjord);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;flex:none}
+.avatar.sm{width:24px;height:24px;font-size:11px}
+.by{display:inline-flex;align-items:center;gap:6px;vertical-align:middle}
+details.admin{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+details.admin summary{cursor:pointer;font-weight:600}
+.staff-row{display:flex;align-items:center;gap:10px;padding:6px 0}
+.staff-row span{flex:1}
+.add-staff{display:grid;gap:8px;margin-top:10px}
+.add-staff input[type=text]{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--bg)}
+.brand{display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:auto}
+.logo{background:#EDF0E7;border-radius:8px;padding:10px 14px;display:block;line-height:0}
+.logo img{height:20px;width:auto;display:block}
+.nav{display:none}
+.nav.on{display:block}
+.nav button{border:0;background:transparent;padding:4px 6px;font-size:12px;cursor:pointer;color:var(--muted);opacity:.55;text-decoration:underline;text-underline-offset:2px}
+.nav button:hover,.nav button:focus-visible{opacity:1}
+.nav button[aria-current="page"]{display:none}
+.wrap{position:relative}
+body[data-view="trainee"] .layout{grid-template-columns:1fr}
+body[data-view="trainee"] aside.panel{display:none}
+body[data-view="trainee"] .cols{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+body:not([data-view="trainee"]) .trainee-only{display:none !important}
+.staff-panel{margin-top:22px;max-width:520px}
+.trainee-bar{display:none;align-items:center;gap:10px;flex-wrap:wrap;background:var(--fjord-soft);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:14px}
+.trainee-bar.on{display:flex}
+body:not([data-view="trainee"]) .trainee-bar{display:none}
+.trainee-bar strong{font-family:"Bricolage Grotesque",sans-serif;font-size:16px}
+.trainee-bar select{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px}
+.login{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(15,30,29,.55);backdrop-filter:blur(6px)}
+.login[hidden],#app[hidden]{display:none}
+.login-box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px;width:100%;max-width:360px}
+.login-box h1{font-size:30px;margin-bottom:4px}
+.login-box p{color:var(--muted);margin:0 0 18px}
+.login-box label{display:block;font-weight:600;font-size:14px;margin:10px 0 4px}
+.login-box input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg)}
+.login-box .btn{margin-top:16px}
+.logout{border:0;background:transparent;font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding:4px 6px}
+.overdue-col h2{color:var(--red)}
+.task.queued{display:grid;grid-template-columns:44px 1fr;gap:0 12px}
+.pos{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:30px;line-height:1;color:var(--muted);text-align:center;padding-top:2px}
+.task.first .pos{color:var(--fjord)}
+.task.late .pos{color:var(--red)}
+.next-tag{display:inline-block;font-size:12px;font-weight:600;background:var(--fjord);color:var(--surface);border-radius:5px;padding:1px 7px;margin-left:8px;vertical-align:middle}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--muted);margin:-4px 0 10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.col h2 .rule{font-family:"Public Sans",sans-serif;font-size:13px;font-weight:400;color:var(--muted);margin-left:auto}
+.col h2{flex-wrap:wrap}
+.overdue-col[hidden]{display:none}
+.due-in{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.actions{position:relative}
+.stats{margin-top:22px}
+.stats-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.month-nav{display:flex;align-items:center;gap:8px;font-weight:600}
+.month-nav span{min-width:130px;text-align:center}
+.stats-total{color:var(--muted);margin:6px 0 14px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.stat-card{border:1px solid var(--line);border-radius:10px;padding:16px;background:var(--bg)}
+.stat-card h3{font-size:18px}
+.stat-big{font-family:"Bricolage Grotesque",sans-serif;font-size:44px;font-weight:700;line-height:1;margin:8px 0 2px;color:var(--fjord)}
+.stat-sub{color:var(--muted);font-size:14px;margin-bottom:12px}
+.stat-line{display:flex;justify-content:space-between;font-size:14px;padding:3px 0}
+.bars{margin-top:10px;display:grid;gap:6px}
+.bar{display:grid;grid-template-columns:96px 1fr 26px;align-items:center;gap:8px;font-size:13px}
+.bar .track{height:8px;border-radius:4px;background:var(--fjord-soft);overflow:hidden}
+.bar .fill{height:100%;background:var(--fjord);border-radius:4px}
+.bar .v{text-align:right;font-weight:600}
+.banner{background:var(--amber-soft);color:var(--ink);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:14px;display:none}
+@media (prefers-reduced-motion:no-preference){.task{transition:border-color .2s}}
+</style>
+</head>
+<body>
+<section class="login" id="login" hidden>
+  <div class="login-box">
+    <h1>Trainee-køen</h1>
+    <p>Skriv passordet for å komme inn.</p>
+    <form id="loginForm">
+      <label for="l-pass">Passord</label>
+      <input id="l-pass" type="password" autocomplete="current-password" required>
+      <button class="btn wide" type="submit">Logg inn</button>
+    </form>
+    <div class="msg" id="loginMsg" role="status"></div>
+  </div>
+</section>
+
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <div>
+      <h1>Trainee-køen</h1>
+      <p id="subtitle">Legg inn oppgaver til traineene. Vi tar dem etter frist.</p>
+    </div>
+    <div class="brand">
+    <nav class="nav" id="nav" aria-label="Sider">
+      <button type="button" data-go="megler" aria-current="page">Meglervisning</button>
+      <button type="button" data-go="trainee">Trainee</button>
+    </nav>
+    <button type="button" class="logout" id="logout">Logg ut</button>
+    </div>
+  </header>
+
+  <div class="trainee-bar" id="traineeBar">
+    <strong>Trainee-visning</strong>
+    <span>Meglerne ser køen, men kan ikke plukke eller flytte oppgaver.</span>
+  </div>
+
+  <div class="banner" id="banner"></div>
+
+  <section class="now" id="now" aria-label="Hva traineene jobber med nå"></section>
+
+  <div class="layout">
+    <aside class="panel">
+      <h2>Ny oppgave</h2>
+      <form id="form" novalidate>
+        <div class="row">
+          <label>Hva skal gjøres?</label>
+          <div class="types" id="types"></div>
+        </div>
+        <div class="row">
+          <label for="f-addr">Oppdrag / adresse</label>
+          <input id="f-addr" placeholder="F.eks. Elvegata 4, Kristiansand" maxlength="120">
+        </div>
+        <div class="row">
+          <label for="f-desc">Beskrivelse</label>
+          <textarea id="f-desc" placeholder="Hva trenger du konkret?" maxlength="2000"></textarea>
+        </div>
+        <div class="row">
+          <label for="f-due">Frist <span class="hint">(dato og klokkeslett)</span></label>
+          <div class="two">
+            <input id="f-due" type="date" required>
+            <input id="f-time" type="time" value="16:00" required aria-label="Klokkeslett">
+          </div>
+        </div>
+        <div class="row">
+          <label>Hvem er du? <span class="hint">Trykk på deg selv</span></label>
+          <div class="staff" id="staffPick"><div class="empty">Laster ansatte …</div></div>
+        </div>
+        <div class="row">
+          <label for="f-extra">Tilleggsinfo <span class="hint">(valgfritt)</span></label>
+          <textarea id="f-extra" placeholder="Lenker, hvor filene ligger, spesielle ønsker …" maxlength="2000"></textarea>
+        </div>
+        <button class="btn wide" type="submit" id="submit">Legg i køen</button>
+        <div class="msg" id="formMsg" role="status"></div>
+      </form>
+
+    </aside>
+
+    <main class="cols">
+      <section class="col">
+        <h2>I køen <span class="n" id="nQueue"></span></h2>
+        <div class="legend"><span><i style="background:var(--green)"></i>2 dager eller mer</span><span><i style="background:var(--amber)"></i>I dag eller i morgen</span><span><i style="background:var(--red)"></i>Over frist</span></div>
+        <div class="list" id="queue"><div class="empty">Laster …</div></div>
+      </section>
+      <section class="col">
+        <h2>Pågår <span class="n" id="nWork"></span></h2>
+        <div class="list" id="working"></div>
+      </section>
+      <section class="col">
+        <h2>Ferdig <span class="n" id="nDone"></span></h2>
+        <div class="list" id="done"></div>
+      </section>
+    </main>
+  </div>
+
+  <section class="panel stats trainee-only" aria-label="Statistikk">
+    <div class="stats-head">
+      <h2>Statistikk</h2>
+      <div class="month-nav">
+        <button type="button" class="btn small ghost" id="prevMonth" aria-label="Forrige måned">‹</button>
+        <span id="statMonth"></span>
+        <button type="button" class="btn small ghost" id="nextMonth" aria-label="Neste måned">›</button>
+      </div>
+    </div>
+    <p class="stats-total" id="statTotal"></p>
+    <div class="stats-grid" id="stats"></div>
+  </section>
+
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+const TYPES = ["Salgsoppgave", "Kontrakt", "Bildetekster", "Visning", "Annet"];
+const DAY = 86400000;
+const $ = s => document.querySelector(s);
+let sb = null, me = null, isTrainee = false, view = "megler";
+let tasks = [], staff = [], pickedStaff = "", selectedType = TYPES[0];
+
+function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k, v);}catch(e){ return null; } }
+
+/* ---------- dates ---------- */
+function today0(){ const d = new Date(); d.setHours(0,0,0,0); return d; }
+function parseDue(t){ const [y,m,d] = (t.due||"").split("-").map(Number); if(!y) return null; return new Date(y, m-1, d); }
+function ms(iso){ return iso ? new Date(iso).getTime() : 0; }
+function dueInfo(t){
+  const d = parseDue(t); if(!d) return {label:"Ingen frist", cls:""};
+  const diff = Math.round((d - today0())/DAY);
+  const time = t.due_time ? " kl. " + t.due_time : "";
+  if (diff < 0) return {label: `Forfalt ${-diff} ${-diff===1?"dag":"dager"}`, cls:"late"};
+  if (diff === 0) return isOverdue(t) ? {label: "Forfalt i dag" + time, cls:"late"} : {label: "I dag" + time, cls:"soon"};
+  if (diff === 1) return {label: "I morgen" + time, cls:"soon"};
+  const s = d.toLocaleDateString("nb-NO", {weekday:"short", day:"numeric", month:"short"});
+  return {label: s + time, cls: "ok"};
+}
+function ago(iso){
+  const t = ms(iso); if(!t) return "";
+  const m = Math.round((Date.now()-t)/60000);
+  if (m < 1) return "akkurat nå";
+  if (m < 60) return `for ${m} min siden`;
+  const h = Math.round(m/60); if (h < 24) return `for ${h} t siden`;
+  return new Date(t).toLocaleDateString("nb-NO",{day:"numeric",month:"short"});
+}
+function isOverdue(t){
+  const d = parseDue(t); if (!d) return false;
+  if (t.due_time){ const [hh,mm] = t.due_time.split(":").map(Number); d.setHours(hh, mm, 0, 0); return d.getTime() < Date.now(); }
+  return d < today0();
+}
+const byCreated = (a,b) => ms(a.created_at) - ms(b.created_at);
+function sortKey(t){ const d = parseDue(t); return (d? d.getTime() : 9e15) + (t.due_time ? Number(t.due_time.replace(":",""))*1000 : 99999999); }
+
+/* ---------- DOM helper ---------- */
+function h(tag, attrs={}, ...kids){
+  const el = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs)){
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) el.setAttribute(k, v);
+  }
+  for (const c of kids.flat()){ if (c == null || c === false) continue; el.append(c.nodeType ? c : document.createTextNode(String(c))); }
+  return el;
+}
+function setMsg(text, err){ const m = $("#formMsg"); m.textContent = text; m.className = "msg" + (err?" err":""); }
+function showBanner(text){ const b = $("#banner"); b.textContent = text; b.style.display = text ? "block" : "none"; }
+
+/* ---------- login ---------- */
+async function boot(){
+  if (!window.supabase || typeof SUPABASE_URL === "undefined" || SUPABASE_URL.includes("DIN-")){
+    $("#login").hidden = false;
+    $("#loginMsg").textContent = "Siden er ikke koblet til databasen ennå. Fyll inn config.js.";
+    $("#loginForm").hidden = true;
+    return;
+  }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) start(session.user); else { $("#app").hidden = false; $("#login").hidden = false; $("#l-pass").focus(); }
+  $("#loginForm").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    $("#loginMsg").textContent = "Logger inn …";
+    const password = $("#l-pass").value;
+    let res = await sb.auth.signInWithPassword({ email: TRAINEE_EMAIL, password: password.trim().toLowerCase() });
+    if (res.error) res = await sb.auth.signInWithPassword({ email: KONTOR_EMAIL, password: password.trim().toLowerCase() });
+    const { data, error } = res;
+    if (error){ $("#loginMsg").textContent = "Feil passord."; $("#l-pass").select(); return; }
+    $("#loginMsg").textContent = "";
+    start(data.user);
+  });
+  $("#logout").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
+}
+
+async function start(user){
+  $("#login").hidden = true; $("#app").hidden = false; $("#l-pass").value = "";
+  const { data: r } = await sb.from("roles").select("role,name").eq("user_id", user.id).maybeSingle();
+  me = r || { role: "megler", name: "" };
+  isTrainee = me.role === "trainee";
+  if (isTrainee){
+    $("#nav").classList.add("on");
+    setView(store("tk-view") || "trainee");
+  } else setView("megler");
+  pickedStaff = store("tk-staff") || "";
+  initForm();
+  await Promise.all([loadStaff(), loadTasks()]);
+  prune();
+  sb.channel("ko")
+    .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => loadTasks())
+    .on("postgres_changes", { event: "*", schema: "public", table: "staff" }, () => loadStaff())
+    .subscribe();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) loadTasks(); });
+  setInterval(render, 60000);
+  setInterval(prune, 10*60000);
+}
+
+/* ---------- data ---------- */
+async function loadTasks(){
+  const { data, error } = await sb.from("tasks").select("*");
+  if (error){ showBanner("Fikk ikke hentet køen. Last siden på nytt."); return; }
+  tasks = data; render();
+}
+async function loadStaff(){
+  const { data } = await sb.from("staff").select("*").order("name");
+  staff = data || []; renderStaff(); render();
+}
+async function prune(){ /* Ferdige oppgaver beholdes for statistikk; de skjules fra listen etter 24 timer. */ }
+
+/* ---------- views ---------- */
+function setView(v){
+  view = (v === "trainee" && isTrainee) ? "trainee" : "megler";
+  document.body.dataset.view = view;
+  store("tk-view", view);
+  document.querySelectorAll("#nav button").forEach(b => b.setAttribute("aria-current", b.dataset.go === view ? "page" : "false"));
+  $("#subtitle").textContent = view === "trainee"
+    ? "Plukk neste oppgave fra køen. Meglerne ser hvem som jobber med hva."
+    : "Legg inn oppgaver til traineene. Vi tar dem etter frist.";
+  showBanner(""); render();
+}
+document.querySelectorAll("#nav button").forEach(b => b.addEventListener("click", () => setView(b.dataset.go)));
+
+/* ---------- staff ---------- */
+function initials(n){ return (n||"?").split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join(""); }
+function avatar(p, small){
+  const cls = "avatar" + (small?" sm":"");
+  if (p && p.photo_url) return h("img",{class:cls, src:p.photo_url, alt:""});
+  return h("span",{class:cls,"aria-hidden":"true"}, initials(p && p.name));
+}
+function staffById(id){ return staff.find(s => s.id === id); }
+function renderStaff(){
+  const box = $("#staffPick"); box.replaceChildren();
+  if (!staff.length) box.append(h("div",{class:"empty"},"Ingen ansatte lagt inn ennå."));
+  for (const p of staff){
+    box.append(h("button",{type:"button",class:"person","aria-pressed": p.id===pickedStaff?"true":"false",
+      onclick:()=>{ pickedStaff = p.id; store("tk-staff", p.id); renderStaff(); }}, avatar(p), p.name));
+  }
+  const list = $("#staffList"); if (!list) return; list.replaceChildren();
+  for (const p of staff){
+    const fileIn = h("input",{type:"file",accept:"image/*",hidden:true,onchange:(ev)=>setPhoto(p, ev.target.files[0])});
+    list.append(h("div",{class:"staff-row"}, avatar(p,true), h("span",{}, p.name), fileIn,
+      h("button",{class:"btn small ghost",type:"button",onclick:()=>fileIn.click()}, p.photo_url ? "Bytt bilde" : "Legg til bilde"),
+      h("button",{class:"btn small ghost",type:"button",onclick:()=>removeStaff(p)},"Fjern")));
+  }
+}
+async function resizeImage(file){
+  const img = await createImageBitmap(file);
+  const size = 320, c = document.createElement("canvas"); c.width = c.height = size;
+  const s = Math.min(img.width, img.height);
+  c.getContext("2d").drawImage(img, (img.width-s)/2, 0, s, s, 0, 0, size, size);
+  return await new Promise(res => c.toBlob(res, "image/jpeg", 0.85));
+}
+async function uploadPhoto(file){
+  const path = crypto.randomUUID() + ".jpg";
+  const { error } = await sb.storage.from("bilder").upload(path, await resizeImage(file), { contentType: "image/jpeg" });
+  if (error) throw error;
+  return sb.storage.from("bilder").getPublicUrl(path).data.publicUrl;
+}
+async function setPhoto(p, file){
+  if (!file) return;
+  const m = $("#staffMsg"); m.textContent = `Laster opp bilde av ${p.name} …`;
+  try{
+    const url = await uploadPhoto(file);
+    const { error } = await sb.from("staff").update({ photo_url: url }).eq("id", p.id);
+    if (error) throw error;
+    m.textContent = `Bildet av ${p.name} er lagret.`;
+  }catch(e){ m.textContent = "Fikk ikke lastet opp bildet. Prøv igjen."; }
+}
+async function addStaff(){
+  const name = $("#s-name").value.trim(), file = $("#s-photo").files[0], m = $("#staffMsg");
+  if (!name){ m.textContent = "Skriv navnet."; return; }
+  $("#s-add").disabled = true; m.textContent = "Lagrer …";
+  try{
+    const photo_url = file ? await uploadPhoto(file) : null;
+    const { error } = await sb.from("staff").insert({ name, photo_url });
+    if (error) throw error;
+    $("#s-name").value = ""; $("#s-photo").value = "";
+    m.textContent = `${name} er lagt til.`;
+  }catch(e){ m.textContent = "Fikk ikke lagt til ansatt. Prøv igjen."; }
+  finally{ $("#s-add").disabled = false; }
+}
+async function removeStaff(p){
+  if (!confirm(`Fjerne ${p.name} fra listen?`)) return;
+  const { error } = await sb.from("staff").delete().eq("id", p.id);
+  if (error) showBanner("Fikk ikke fjernet ansatt.");
+}
+
+/* ---------- render ---------- */
+function title(t){ return t.type + (t.address ? " – " + t.address : ""); }
+function render(){
+  const q = tasks.filter(t => t.status === "queue").sort(byCreated);
+  const over = q.filter(isOverdue);
+  const w = tasks.filter(t => t.status === "working").sort((a,b)=>ms(a.started_at)-ms(b.started_at));
+  const cutoff = Date.now() - DAY;
+  const d = tasks.filter(t => t.status === "done" && ms(t.done_at) > cutoff).sort((a,b)=>ms(b.done_at)-ms(a.done_at));
+  const trainees = [...new Set(["Victor", "Siw", ...w.map(t => t.assignee).filter(Boolean)])];
+
+  const now = $("#now"); now.replaceChildren();
+  for (const name of trainees){
+    const mine = w.filter(t => t.assignee === name);
+    if (mine.length){
+      now.append(h("div",{class:"slot"},
+        h("div",{class:"who-name"}, `${name} jobber med`),
+        ...mine.map(t => h("div",{class:"doing"}, `${title(t)} (for ${t.requested_by})`))));
+    } else {
+      now.append(h("div",{class:"slot free"},
+        h("div",{class:"who-name"}, `${name} er ledig`),
+        over.length
+          ? h("div",{class:"doing",style:"color:var(--red);font-weight:600"}, `${over.length} ${over.length===1?"oppgave":"oppgaver"} over frist`)
+          : h("div",{class:"doing"}, q.length ? `${q.length} ${q.length===1?"oppgave venter":"oppgaver venter"} i køen` : "Ingenting i køen")));
+    }
+  }
+  fill("#queue", q, "Køen er tom.", 1);
+  fill("#working", w, "Ingen jobber med noe akkurat nå.");
+  fill("#done", d, "Ingenting ferdig det siste døgnet. Ferdige oppgaver forsvinner herfra etter 24 timer.");
+  $("#nQueue").textContent = q.length ? `(${q.length})` : "";
+  $("#nWork").textContent = w.length ? `(${w.length})` : "";
+  $("#nDone").textContent = d.length ? `(${d.length})` : "";
+  renderStats();
+}
+function fill(sel, list, emptyText, startPos){
+  const box = $(sel); box.replaceChildren();
+  if (!list.length){ box.append(h("div",{class:"empty"}, emptyText)); return; }
+  list.forEach((t, i) => box.append(card(t, startPos ? startPos + i : 0)));
+}
+function when(iso){
+  const t = ms(iso); if (!t) return "";
+  const d = new Date(t), clock = d.toLocaleTimeString("nb-NO",{hour:"2-digit",minute:"2-digit"});
+  const diff = Math.round((today0() - new Date(d.getFullYear(), d.getMonth(), d.getDate()))/DAY);
+  if (diff === 0) return "i dag kl. " + clock;
+  if (diff === 1) return "i går kl. " + clock;
+  return d.toLocaleDateString("nb-NO",{weekday:"short",day:"numeric",month:"short"}) + " kl. " + clock;
+}
+function card(t, pos){
+  const di = dueInfo(t);
+  const statusCls = t.status === "done" ? "done" : t.status === "working" ? "working" : di.cls;
+  const actions = h("div",{class:"actions"});
+  if (isTrainee && view === "trainee"){
+    if (t.status === "queue"){
+      actions.append(h("button",{class:"btn small", onclick:()=>claim(t, "Victor")}, "Victor tar den"));
+      actions.append(h("button",{class:"btn small", onclick:()=>claim(t, "Siw")}, "Siw tar den"));
+      actions.append(newDueBtn(t));
+      actions.append(h("button",{class:"btn small ghost", onclick:()=>remove(t)}, "Slett"));
+    } else if (t.status === "working"){
+      actions.append(newDueBtn(t));
+      actions.append(h("button",{class:"btn small ok", onclick:()=>update(t, {status:"done", done_at:new Date().toISOString()})}, "Marker som ferdig"));
+      actions.append(h("button",{class:"btn small ghost", onclick:()=>update(t, {status:"queue", assignee:null, started_at:null})}, "Legg tilbake i køen"));
+    } else {
+      actions.append(h("button",{class:"btn small ghost", onclick:()=>update(t, {status:"working", done_at:null})}, "Åpne igjen"));
+    }
+  }
+  const body = [
+    h("div",{class:"head"},
+      h("div",{}, h("h3",{}, t.type || "Oppgave"), t.address ? h("div",{class:"addr"}, t.address) : null),
+      h("span",{class:`due ${t.status==="done"?"done":di.cls}`}, t.status==="done" ? "Ferdig " + ago(t.done_at) : di.label)),
+    t.description ? h("p",{class:"desc"}, t.description) : null,
+    t.extra ? h("p",{class:"extra"}, t.extra) : null,
+    t.status === "working" ? h("div",{class:"worker"}, `${t.assignee} jobber med denne, startet ${ago(t.started_at)}`) : null,
+    t.status === "done" && t.assignee ? h("div",{class:"meta"}, `Gjort av ${t.assignee}`) : null,
+    h("div",{class:"meta"}, h("span",{class:"by"}, avatar(staffById(t.requested_by_id) || {name:t.requested_by}, true), `Lagt inn av ${t.requested_by} ${when(t.created_at)}`)),
+    actions.childNodes.length ? actions : null];
+  if (pos) return h("article",{class:`task queued ${statusCls}${pos===1?" first":""}`},
+    h("div",{class:"pos","aria-label":`Nummer ${pos} i køen`}, pos), h("div",{}, ...body));
+  return h("article",{class:`task ${statusCls}`}, ...body);
+}
+
+/* ---------- statistikk ---------- */
+let statMonth = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
+function deadlineMs(t){
+  const d = parseDue(t); if (!d) return null;
+  const [hh, mm] = (t.due_time || "23:59").split(":").map(Number); d.setHours(hh, mm, 59, 0); return d.getTime();
+}
+function dur(msv){
+  const m = Math.round(msv/60000);
+  if (m < 60) return `${m} min`;
+  const hrs = m/60; if (hrs < 48) return `${Math.round(hrs)} t`;
+  return `${Math.round(hrs/24)} dager`;
+}
+function renderStats(){
+  const box = $("#stats"); if (!box || !isTrainee) return;
+  const start = statMonth, end = new Date(start.getFullYear(), start.getMonth()+1, 1);
+  const label = start.toLocaleDateString("nb-NO", {month:"long", year:"numeric"});
+  $("#statMonth").textContent = label.charAt(0).toUpperCase() + label.slice(1);
+  const cur = new Date(); $("#nextMonth").disabled = start.getFullYear() === cur.getFullYear() && start.getMonth() === cur.getMonth();
+  const done = tasks.filter(t => t.status === "done" && t.assignee && ms(t.done_at) >= start.getTime() && ms(t.done_at) < end.getTime());
+  $("#statTotal").textContent = done.length ? `${done.length} ${done.length===1?"oppgave":"oppgaver"} ferdig denne måneden.` : "Ingen ferdige oppgaver denne måneden.";
+  const people = [...new Set(["Victor", "Siw", ...done.map(t => t.assignee)])];
+  box.replaceChildren(...people.map(name => {
+    const mine = done.filter(t => t.assignee === name);
+    const onTime = mine.filter(t => { const dl = deadlineMs(t); return dl == null || ms(t.done_at) <= dl; }).length;
+    const leads = mine.map(t => ms(t.done_at) - ms(t.created_at)).filter(x => x > 0);
+    const work = mine.map(t => ms(t.done_at) - ms(t.started_at)).filter(x => x > 0);
+    const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
+    const byType = [...new Set(mine.map(t => t.type))].map(tp => [tp, mine.filter(t => t.type === tp).length]).sort((a,b)=>b[1]-a[1]);
+    const max = Math.max(1, ...byType.map(x => x[1]));
+    return h("div",{class:"stat-card"},
+      h("h3",{}, name),
+      h("div",{class:"stat-big"}, mine.length),
+      h("div",{class:"stat-sub"}, mine.length===1 ? "oppgave ferdig" : "oppgaver ferdig"),
+      mine.length ? [
+        h("div",{class:"stat-line"}, h("span",{},"Innen fristen"), h("strong",{}, `${onTime} av ${mine.length} (${Math.round(onTime/mine.length*100)} %)`)),
+        h("div",{class:"stat-line"}, h("span",{},"Snitt fra lagt inn til ferdig"), h("strong",{}, dur(avg(leads)))),
+        h("div",{class:"stat-line"}, h("span",{},"Snitt arbeidstid"), h("strong",{}, dur(avg(work)))),
+        h("div",{class:"bars"}, ...byType.map(([tp, n]) => h("div",{class:"bar"},
+          h("span",{}, tp), h("span",{class:"track"}, h("span",{class:"fill",style:`width:${n/max*100}%;display:block`})), h("span",{class:"v"}, n))))
+      ] : null);
+  }));
+}
+$("#prevMonth").addEventListener("click", () => { statMonth = new Date(statMonth.getFullYear(), statMonth.getMonth()-1, 1); renderStats(); });
+$("#nextMonth").addEventListener("click", () => { statMonth = new Date(statMonth.getFullYear(), statMonth.getMonth()+1, 1); renderStats(); });
+
+/* ---------- trainee actions ---------- */
+function newDueBtn(t){
+  const inp = h("input",{type:"date",class:"due-in","aria-label":"Ny frist",value:t.due||"",
+    onchange:(ev)=>{ if (ev.target.value) update(t, {due: ev.target.value, due_time: t.due_time || "16:00"}); }});
+  const btn = h("button",{class:"btn small ghost",type:"button",onclick:()=>{
+    try{ inp.showPicker(); }catch(e){ inp.style.cssText="position:static;opacity:1;width:auto;height:auto;pointer-events:auto"; inp.focus(); }
+  }}, "Ny frist");
+  return h("span",{style:"position:relative;display:inline-flex"}, btn, inp);
+}
+async function claim(t, name){
+  const { data, error } = await sb.from("tasks")
+    .update({ status:"working", assignee: name, started_at: new Date().toISOString() })
+    .eq("id", t.id).eq("status", "queue").select();
+  if (error){ showBanner("Fikk ikke tatt oppgaven. Prøv igjen."); return; }
+  if (!data.length){ showBanner("Oppgaven er allerede tatt."); loadTasks(); return; }
+  showBanner(""); loadTasks();
+}
+async function update(t, patch){
+  const { error } = await sb.from("tasks").update(patch).eq("id", t.id);
+  if (error) showBanner("Fikk ikke lagret endringen. Prøv igjen."); else { showBanner(""); loadTasks(); }
+}
+async function remove(t){
+  if (!confirm(`Slette «${title(t)}»?`)) return;
+  const { error } = await sb.from("tasks").delete().eq("id", t.id);
+  if (error) showBanner("Fikk ikke slettet oppgaven."); else loadTasks();
+}
+
+/* ---------- form ---------- */
+let formReady = false;
+function initForm(){
+  if (formReady) return; formReady = true;
+  const box = $("#types");
+  TYPES.forEach(tp => box.append(h("button",{type:"button","aria-pressed": tp===selectedType ? "true":"false", onclick:(ev)=>{
+    selectedType = tp; box.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b===ev.currentTarget?"true":"false"));
+  }}, tp)));
+  const t = new Date(Date.now()+DAY); $("#f-due").value = t.toISOString().slice(0,10);
+  $("#form").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const person = staffById(pickedStaff), due = $("#f-due").value, desc = $("#f-desc").value.trim();
+    if (!due){ setMsg("Velg en frist.", true); return; }
+    if (!person){ setMsg("Trykk på bildet ditt så vi vet hvem som legger inn.", true); return; }
+    if (!desc && !$("#f-addr").value.trim()){ setMsg("Skriv en adresse eller en beskrivelse.", true); return; }
+    $("#submit").disabled = true;
+    const { error } = await sb.from("tasks").insert({
+      type: selectedType, address: $("#f-addr").value.trim(), description: desc,
+      extra: $("#f-extra").value.trim(), due, due_time: $("#f-time").value || "16:00",
+      requested_by: person.name, requested_by_id: person.id
+    });
+    $("#submit").disabled = false;
+    if (error){ setMsg("Fikk ikke lagt inn oppgaven. Prøv igjen.", true); return; }
+    ["#f-addr","#f-desc","#f-extra"].forEach(s => $(s).value = ""); $("#f-time").value = "16:00";
+    setMsg("Lagt i køen."); loadTasks();
+  });
+}
+
+boot();
+</script>
+
+</body>
+</html>
