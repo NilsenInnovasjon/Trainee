@@ -95,6 +95,7 @@ form textarea{resize:vertical;min-height:70px}
 .task.late .pos{color:var(--red)}
 .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--muted);margin:-4px 0 10px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.due-in{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
 .staff{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px}
 .person{border:2px solid transparent;background:var(--bg);border-radius:10px;padding:6px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px;line-height:1.2;text-align:center}
 .person[aria-pressed="true"]{border-color:var(--fjord);background:var(--fjord-soft);font-weight:600}
@@ -548,4 +549,91 @@ function renderStats(){
   if (!isTrainee) return;
   const start = statMonth, end = new Date(start.getFullYear(), start.getMonth()+1, 1);
   const label = start.toLocaleDateString("nb-NO", {month:"long", year:"numeric"});
-  $("#statMonth").textContent =
+  $("#statMonth").textContent = label.charAt(0).toUpperCase() + label.slice(1);
+  const cur = new Date();
+  $("#nextMonth").disabled = start.getFullYear() === cur.getFullYear() && start.getMonth() === cur.getMonth();
+  const done = tasks.filter(t => t.status === "done" && t.assignee && ms(t.done_at) >= start.getTime() && ms(t.done_at) < end.getTime());
+  $("#statTotal").textContent = done.length ? `${done.length} ${done.length===1?"oppgave":"oppgaver"} ferdig denne måneden.` : "Ingen ferdige oppgaver denne måneden.";
+  const avg = a => a.length ? a.reduce((x,y) => x+y, 0)/a.length : 0;
+  const people = [...new Set(["Victor", "Siw", ...done.map(t => t.assignee)])];
+  $("#stats").replaceChildren(...people.map(name => {
+    const mine = done.filter(t => t.assignee === name);
+    const onTime = mine.filter(t => { const dl = deadlineMs(t); return dl == null || ms(t.done_at) <= dl; }).length;
+    const leads = mine.map(t => ms(t.done_at) - ms(t.created_at)).filter(x => x > 0);
+    const work = mine.map(t => ms(t.done_at) - ms(t.started_at)).filter(x => x > 0);
+    const byType = [...new Set(mine.map(t => t.type))].map(tp => [tp, mine.filter(t => t.type === tp).length]).sort((a,b) => b[1]-a[1]);
+    const max = Math.max(1, ...byType.map(x => x[1]));
+    return h("div", {class:"stat-card"},
+      h("h3", {}, name),
+      h("div", {class:"stat-big"}, mine.length),
+      h("div", {class:"stat-sub"}, mine.length === 1 ? "oppgave ferdig" : "oppgaver ferdig"),
+      mine.length ? [
+        h("div", {class:"stat-line"}, h("span", {}, "Innen fristen"), h("strong", {}, `${onTime} av ${mine.length} (${Math.round(onTime/mine.length*100)} %)`)),
+        h("div", {class:"stat-line"}, h("span", {}, "Snitt fra lagt inn til ferdig"), h("strong", {}, dur(avg(leads)))),
+        h("div", {class:"stat-line"}, h("span", {}, "Snitt arbeidstid"), h("strong", {}, dur(avg(work)))),
+        h("div", {class:"bars"}, ...byType.map(([tp, n]) => h("div", {class:"bar"},
+          h("span", {}, tp), h("span", {class:"track"}, h("span", {class:"fill", style:`width:${n/max*100}%`})), h("span", {class:"v"}, n))))
+      ] : null);
+  }));
+}
+$("#prevMonth").addEventListener("click", () => { statMonth = new Date(statMonth.getFullYear(), statMonth.getMonth()-1, 1); renderStats(); });
+$("#nextMonth").addEventListener("click", () => { statMonth = new Date(statMonth.getFullYear(), statMonth.getMonth()+1, 1); renderStats(); });
+
+/* ---------- handlinger ---------- */
+async function claim(t, name){
+  const { data, error } = await sb.from("tasks")
+    .update({ status:"working", assignee:name, started_at:new Date().toISOString() })
+    .eq("id", t.id).eq("status", "queue").select();
+  if (error){ showBanner("Fikk ikke tatt oppgaven. Prøv igjen."); return; }
+  if (!data.length){ showBanner("Oppgaven er allerede tatt."); loadTasks(); return; }
+  showBanner(""); loadTasks();
+}
+async function update(t, patch){
+  const { error } = await sb.from("tasks").update(patch).eq("id", t.id);
+  if (error) showBanner("Fikk ikke lagret endringen. Prøv igjen."); else { showBanner(""); loadTasks(); }
+}
+async function remove(t){
+  if (!confirm(`Slette «${title(t)}»?`)) return;
+  let query = sb.from("tasks").delete().eq("id", t.id);
+  if (!isTrainee) query = query.eq("status", "queue");
+  const { data, error } = await query.select();
+  if (error){ showBanner("Fikk ikke slettet oppgaven."); return; }
+  if (!data.length){ showBanner("En trainee har allerede tatt denne oppgaven, så den kan ikke slettes. Si fra til dem direkte."); }
+  else showBanner("");
+  loadTasks();
+}
+
+/* ---------- skjema ---------- */
+let formReady = false;
+function initForm(){
+  if (formReady) return; formReady = true;
+  const box = $("#types");
+  TYPES.forEach(tp => box.append(h("button", {type:"button", "aria-pressed": tp === selectedType ? "true" : "false", onclick:ev => {
+    selectedType = tp;
+    box.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b === ev.currentTarget ? "true" : "false"));
+  }}, tp)));
+  $("#f-due").value = new Date(Date.now() + DAY).toISOString().slice(0,10);
+  $("#form").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const person = staffById(pickedStaff), due = $("#f-due").value, desc = $("#f-desc").value.trim();
+    if (!due){ setMsg("Velg en frist.", true); return; }
+    if (!person){ setMsg("Trykk på bildet ditt så vi vet hvem som legger inn.", true); return; }
+    if (!desc && !$("#f-addr").value.trim()){ setMsg("Skriv en adresse eller en beskrivelse.", true); return; }
+    $("#submit").disabled = true;
+    const { error } = await sb.from("tasks").insert({
+      type:selectedType, address:$("#f-addr").value.trim(), description:desc,
+      extra:$("#f-extra").value.trim(), due, due_time:$("#f-time").value || "16:00",
+      requested_by:person.name, requested_by_id:person.id
+    });
+    $("#submit").disabled = false;
+    if (error){ setMsg("Fikk ikke lagt inn oppgaven. Prøv igjen.", true); return; }
+    ["#f-addr", "#f-desc", "#f-extra"].forEach(s => $(s).value = "");
+    $("#f-time").value = "16:00";
+    setMsg("Lagt i køen."); loadTasks();
+  });
+}
+
+boot();
+</script>
+</body>
+</html>
