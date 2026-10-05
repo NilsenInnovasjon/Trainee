@@ -289,6 +289,7 @@ body[data-view="trainee"] .trainee-bar{display:flex}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script>
+const TRAINEES = ["Victor", "Siw", "Dawoud"];
 const TYPES = ["Salgsoppgave", "Kontrakt", "Bildetekster", "Video/film", "Visning", "Annet"];
 const DAY = 86400000;
 const $ = s => document.querySelector(s);
@@ -442,7 +443,7 @@ function render(){
   const w = tasks.filter(t => t.status === "working").sort((a,b) => ms(a.started_at) - ms(b.started_at));
   const cutoff = Date.now() - DAY;
   const d = tasks.filter(t => t.status === "done" && ms(t.done_at) > cutoff).sort((a,b) => ms(b.done_at) - ms(a.done_at));
-  const trainees = [...new Set(["Victor", "Siw", ...w.map(t => t.assignee).filter(Boolean)])];
+  const trainees = [...new Set([...TRAINEES, ...w.map(t => t.assignee).filter(Boolean)])];
 
   const now = $("#now"); now.replaceChildren();
   for (const name of trainees){
@@ -476,8 +477,7 @@ function card(t, pos){
   const actions = h("div", {class:"actions"});
   if (isTrainee && view === "trainee"){
     if (t.status === "queue"){
-      actions.append(h("button", {class:"btn small", onclick:() => claim(t, "Victor")}, "Victor tar den"));
-      actions.append(h("button", {class:"btn small", onclick:() => claim(t, "Siw")}, "Siw tar den"));
+      TRAINEES.forEach(n => actions.append(h("button", {class:"btn small", onclick:() => claim(t, n)}, `${n} tar den`)));
       actions.append(h("button", {class:"btn small ghost", onclick:() => openEdit(t)}, "Rediger"));
       actions.append(h("button", {class:"btn small ghost", onclick:() => remove(t)}, "Slett"));
     } else if (t.status === "working"){
@@ -559,7 +559,7 @@ function renderStats(){
   const done = tasks.filter(t => t.status === "done" && t.assignee && ms(t.done_at) >= start.getTime() && ms(t.done_at) < end.getTime());
   $("#statTotal").textContent = done.length ? `${done.length} ${done.length===1?"oppgave":"oppgaver"} ferdig denne måneden.` : "Ingen ferdige oppgaver denne måneden.";
   const avg = a => a.length ? a.reduce((x,y) => x+y, 0)/a.length : 0;
-  const people = [...new Set(["Victor", "Siw", ...done.map(t => t.assignee)])];
+  const people = [...new Set([...TRAINEES, ...done.map(t => t.assignee)])];
   $("#stats").replaceChildren(...people.map(name => {
     const mine = done.filter(t => t.assignee === name);
     const onTime = mine.filter(t => { const dl = deadlineMs(t); return dl == null || ms(t.done_at) <= dl; }).length;
